@@ -16,3 +16,5 @@ grow_vertical = 2
 texture = SubResource("PlaceholderTexture2D_go3fl")
 script = ExtResource("1_omn0o")
 input_sample = ExtResource("2_r2qrq")
+rotations = true
+reflections = true

@@ -11,11 +11,15 @@ const MID_PATTERN_PIXEL: int = 4
 var color_indices: Array[Color] = []
 
 var pixel_patterns: Array[Array]
+var pattern_links: Array[PatternLink]
 var image_wave: Array[Array]
 var output_image: Image
 var wave_front: Array[int] = []
 var final_print: bool = false
 
+var debug: bool = true
+var debug_patterns_image: Image
+var stop_at_step: int = 100
 
 #region doc
 # Algorithm
@@ -48,6 +52,57 @@ func _ready() -> void:
 	if not input_sample:
 		printerr("input_sample required")
 	
+	_extract_pixel_patterns()
+	_create_pattern_matching_connections()
+	
+	if debug:
+		print(color_indices)
+		print(len(pixel_patterns), " pixel patterns")
+		print(pixel_patterns)
+		#print(pattern_links)
+	
+	_prepare_image_wave_as_a_pattern_index_array()
+	
+	if debug:
+		_create_and_save_debug_pattern_image()
+	
+	# Prepare the output
+	output_image = Image.create_empty(texture.get_width(), texture.get_height(), false, input_sample.get_image().get_format())
+	
+	# Setup an initial front
+	var random_wave_index: int = randi_range(0, len(image_wave))
+	wave_front = [random_wave_index]
+
+func _process(delta: float) -> void:
+	if stop_at_step <= 0:
+		return
+	else:
+		stop_at_step -= 1
+	
+	if len(wave_front) <= 0:
+		## some debug from the last run
+		#if not final_print:
+			#if debug:
+				#print(image_wave.map(
+					#func (pattern_list: Array[int]) -> int:
+						#return -1 if pattern_list.is_empty() else (
+							#pixel_patterns[pattern_list[0]][MID_PATTERN_PIXEL]
+						#) 
+				#))
+			#final_print = true
+			#
+		return
+	
+	var next_image_wave_index: int = wave_front.front()
+	
+	_collapse_by_wave_index(next_image_wave_index)
+	_update_output_pixel_from_image_wave(next_image_wave_index)
+	
+	texture = ImageTexture.create_from_image(output_image)
+
+#region create patterns
+
+func _extract_pixel_patterns() -> void:
 	# create the 3x3 pixel patterns from the input_sample
 	pixel_patterns = _get_3x3_pixel_patterns(input_sample)
 	
@@ -63,77 +118,6 @@ func _ready() -> void:
 	
 	# Strip any duplicate patterns
 	pixel_patterns = _strip_duplicate_patterns(pixel_patterns)
-	
-	print(color_indices)
-	#print(len(pixel_patterns), " pixel patterns")
-	print(pixel_patterns)
-	
-	# Prepare the output
-	var template_cell: Array[int] = []
-	for index in len(pixel_patterns):
-		template_cell.append(index)
-	
-	image_wave = []
-	for _index in range(texture.get_width() * texture.get_height()):
-		image_wave.append(template_cell.duplicate())
-	
-	#print(len(image_wave))
-	output_image = Image.create_empty(texture.get_width(), texture.get_height(), false, input_sample.get_image().get_format())
-	
-	# Setup an initial front
-	var random_wave_index: int = randi_range(0, len(image_wave))
-	# Collapse element to a definite state
-	#print(random_wave_index)
-	_collapse_by_wave_index(random_wave_index)
-	
-	#print(wave_front)
-
-func _process(delta: float) -> void:
-	var a_t: float = Time.get_unix_time_from_system()
-	if len(wave_front) <= 0:
-		# some debug from the last run
-		if not final_print:
-			#print(image_wave.map(func (pattern_list: Array[int]) -> int: return len(pattern_list)))
-			#print(image_wave.map(func (pattern_list: Array[int]) -> int: return -1 if pattern_list.is_empty() else pattern_list[0]))
-			#print(image_wave.map(
-				#func (pattern_list: Array[int]) -> int:
-					#return -1 if pattern_list.is_empty() else (
-						#pixel_patterns[pattern_list[0]][MID_PATTERN_PIXEL]
-					#) 
-			#))
-			final_print = true
-			
-		return
-	
-	var next_image_wave_index: int = wave_front.front()
-	
-	#print(next_image_wave_index)
-	
-	_collapse_by_wave_index(next_image_wave_index)
-	#print(wave_front)
-	
-	var b_t: float = Time.get_unix_time_from_system()
-	
-	# Set image output by current wave potentials
-	# TODO: Only update the changed pixel!
-	var y: int = next_image_wave_index / output_image.get_width()
-	var x: int = next_image_wave_index % output_image.get_width()
-	var pixel_pattern_array: Array[int] = image_wave[next_image_wave_index]
-	output_image.set_pixel(x, y, _get_potential_color_result(pixel_pattern_array))
-	
-	#for y in output_image.get_height():
-		#for x in output_image.get_width():
-			#var wave_index: int = y * output_image.get_width() + x
-			#var pixel_pattern_array: Array[int] = image_wave[wave_index]
-			#output_image.set_pixel(x, y, _get_potential_color_result(pixel_pattern_array))
-	
-	var c_t: float = Time.get_unix_time_from_system()
-	
-	texture = ImageTexture.create_from_image(output_image)
-	
-	var d_t: float = Time.get_unix_time_from_system()
-	
-	#print("a: ", (b_t - a_t), ", b: ", (c_t - b_t), ", c: ", (d_t - c_t), ", delta: ", delta)
 
 func _get_3x3_pixel_patterns(sample: Texture2D) -> Array[Array]:
 	var patterns: Array[Array] = []
@@ -235,6 +219,36 @@ func _flip_vert(pixel_pattern: Array[int]) -> Array[int]:
 		pixel_pattern[0], pixel_pattern[1], pixel_pattern[2],
 	]
 
+#endregion
+
+#region setup image wave
+
+func _prepare_image_wave_as_a_pattern_index_array() -> void:
+	# prepare the workspace for potential patterns at each cell
+	var template_cell: Array[int] = []
+	for index in len(pixel_patterns):
+		template_cell.append(index)
+	
+	image_wave = []
+	for _index in range(texture.get_width() * texture.get_height()):
+		image_wave.append(template_cell.duplicate())
+
+func _create_pattern_matching_connections() -> void:
+	"""Create a mapping from each pattern to patterns that will fit in each direction"""
+	pattern_links = []
+	for pattern_index in range(len(pixel_patterns)):
+		pattern_links.append(PatternLink.new(pixel_patterns, pattern_index))
+
+#endregion
+
+#region output update
+
+func _update_output_pixel_from_image_wave(index: int) -> void:
+	var y: int = index / output_image.get_width()
+	var x: int = index % output_image.get_width()
+	var pixel_pattern_array: Array[int] = image_wave[index]
+	output_image.set_pixel(x, y, _get_potential_color_result(pixel_pattern_array))
+
 func _get_potential_color_result(pattern_indices: Array[int]) -> Color:
 	if len(pattern_indices) < 1:
 		printerr("No patterns to average!")
@@ -248,6 +262,10 @@ func _get_potential_color_result(pattern_indices: Array[int]) -> Color:
 	
 	color_vector /= color_count
 	return Color(color_vector.x, color_vector.y, color_vector.z, color_vector.w)
+
+#endregion
+
+#region collapsing to a pattern
 
 func _collapse_by_wave_index(index: int) -> void:
 	if index in wave_front:
@@ -280,14 +298,15 @@ func _reduce_patterns_by_the_adjacent_possible_patterns(index: int) -> void:
 			if x == 0 and y == 0: continue
 			
 			var neighbour_index: int = index + (y * output_image.get_width()) + x
-			# Check for edges
-			if neighbour_index < 0 or neighbour_index >= len(image_wave): continue
+			# Check for and skip over edge boundaries
+			if neighbour_index < 0: continue
+			if neighbour_index >= len(image_wave): continue
 			if x == -1 and index % output_image.get_width() == 0: continue
 			if x == 1 and neighbour_index % output_image.get_width() == 0: continue
 				
 			if len(pattern_list) <= 0:
 				printerr("No viable patterns left at index ", index)
-				continue
+				break
 			
 			var neighbour_in_pattern: int = 4 + x + (y * 3)
 			var neighbour_possible_color_ids: Array = image_wave[neighbour_index].map(
@@ -303,6 +322,9 @@ func _reduce_patterns_by_the_adjacent_possible_patterns(index: int) -> void:
 			
 			# Update for the next neighbour
 			pattern_list = updated_pattern_list
+		
+		if len(pattern_list) <= 0:
+			break
 	
 	# Record the newly limited patterns in the wave
 	image_wave[index] = pattern_list
@@ -345,6 +367,7 @@ func _reduce_surrounding_pattern_lists(index: int) -> Array[int]:
 				origin_pixel_color_index,
 				pattern_pos_of_origin_relative_to_neighbour,
 			)
+			#_reduce_patterns_by_the_adjacent_possible_patterns(neighbour_index)
 	
 	return updated_indices
 
@@ -377,3 +400,29 @@ func _update_wavefront_insert_index(index: int) -> void:
 			return len(image_wave[a]) < len(image_wave[b])
 	)
 	wave_front.insert(insertion_index, index)
+
+#endregion
+
+func _create_and_save_debug_pattern_image() -> void:
+	# Create an image big enough to hold the patterns
+	var buffer_size: int = 1
+	var pattern_count: int = len(pixel_patterns)
+	var pattern_grid_side: int = int(ceil(sqrt(pattern_count)))
+	var image_side: int = pattern_grid_side * (3 + buffer_size) + buffer_size
+	var pattern_image: Image = Image.create(image_side, image_side, false, Image.FORMAT_RGBA8)
+	
+	# Insert each pattern into the image
+	for pattern_index: int in range(pattern_count):
+		var pattern_x: int = pattern_index % pattern_grid_side
+		var pattern_y: int = pattern_index / pattern_grid_side
+		var start_x: int = pattern_x * (3 + buffer_size)
+		var start_y: int = pattern_y * (3 + buffer_size)
+		for pixel_index: int in range(9):
+			var color_index: int = pixel_patterns[pattern_index][pixel_index]
+			var color: Color = color_indices[color_index]
+			var x: int = start_x + (pixel_index % 3) + buffer_size
+			var y: int = start_y + (pixel_index / 3) + buffer_size
+			pattern_image.set_pixel(x, y, color)
+	
+	# save the image to a PNG
+	pattern_image.save_png("res://PixelDrawn/samples/test_patterns.png")
