@@ -1,0 +1,18 @@
+[gd_scene load_steps=4 format=3 uid="uid://ds2mmim41c0j2"]
+
+[ext_resource type="Script" path="res://PixelDrawn/wave_function_collapse.gd" id="1_omn0o"]
+[ext_resource type="Texture2D" uid="uid://osiwhfkvrxr6" path="res://PixelDrawn/samples/Flowers.png" id="2_r2qrq"]
+
+[sub_resource type="PlaceholderTexture2D" id="PlaceholderTexture2D_go3fl"]
+size = Vector2(75, 50)
+
+[node name="WaveFunctionCollapse" type="TextureRect"]
+texture_filter = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = SubResource("PlaceholderTexture2D_go3fl")
+script = ExtResource("1_omn0o")
+input_sample = ExtResource("2_r2qrq")
