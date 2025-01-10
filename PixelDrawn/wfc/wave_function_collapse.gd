@@ -65,13 +65,18 @@ func _ready() -> void:
 	print(edge_bound_pattern_indices)
 	
 	# Just do this for 1 tile
+	var edge_tile_selected: bool = false
 	for dir: Vector2i in edge_bound_pattern_indices:
 		var edge_pattern_list: Array[int]
 		edge_pattern_list.assign(edge_bound_pattern_indices[dir])
 		if not edge_pattern_list.is_empty():
 			var rand_index: int = randi_range(0, len(edge_pattern_list) - 1)
 			pattern_wave.put_pattern_at_edge_position(dir, edge_pattern_list[rand_index])
+			edge_tile_selected = true
 			break
+	
+	if not edge_tile_selected:
+		pattern_wave.put_random_pattern_at_random_position()
 	
 	_update_output_image_from_latest_changes()
 

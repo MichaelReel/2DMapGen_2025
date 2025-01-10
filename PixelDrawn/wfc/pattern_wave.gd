@@ -189,6 +189,18 @@ func _restrict_patterns_at_cell(
 		# Still want to record that this cell has changes?
 		_updated_cells.append(pos)
 
+func put_random_pattern_at_random_position() -> void:
+	var pos: Vector2i = Vector2i(
+		randi_range(1, _image_size.x - 2),
+		randi_range(1, _image_size.y - 2),
+	)
+	var available_pattern_indices: Array[int] = get_remaining_patterns_in_cell(pos)
+	var pattern_index: int = available_pattern_indices[
+		randi_range(0, len(available_pattern_indices) - 1)
+	]
+	
+	set_specific_pattern_at_cell(pos, pattern_index)
+
 func put_pattern_at_edge_position(edge_dir: Vector2i, pattern_index: int) -> void:
 	# Which position to mess with? First, default to center:
 	var pos: Vector2i = _image_size / 2
